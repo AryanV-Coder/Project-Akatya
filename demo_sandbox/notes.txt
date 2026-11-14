@@ -1,0 +1,3 @@
+Project Akatya Architecture Notes
+Hybrid Cryptography + Heuristic Kill-Switch.
+Updated: Phase 2 verified successfully.
