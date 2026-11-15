@@ -7,3 +7,5 @@ requests
 watchdog
 psutil
 fpdf2
+streamlit
+pandas

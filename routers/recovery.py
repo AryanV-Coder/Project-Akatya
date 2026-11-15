@@ -12,8 +12,9 @@ def recover_endpoint_files(endpoint_id: str):
     """
     Recovers the latest clean backup of all files for an endpoint:
     1. Fetches the endpoint's securely stored RSA Private Key from Supabase PostgreSQL.
-    2. Queries the latest version of every backed-up file.
-    3. Downloads the encrypted ciphertext directly from Supabase Storage bucket 'akatya-backups'.
+    2. Queries the latest CLEAN version of each file, strictly excluding any versions
+       marked as compromised in `incident_evidence`.
+    3. Downloads encrypted ciphertext directly from Supabase Storage bucket 'akatya-backups'.
     4. Decrypts AES key using the RSA Private Key.
     5. Decrypts file content using AES-GCM and verifies SHA-256 hash.
     6. Returns clean files payload.
@@ -28,12 +29,15 @@ def recover_endpoint_files(endpoint_id: str):
 
             hostname, private_key_pem = ep[0], ep[1]
 
-            # 2. Fetch latest version of each file for this endpoint
+            # 2. Fetch latest CLEAN version of each file for this endpoint
             latest_backups_query = """
                 SELECT DISTINCT ON (original_path) 
                        id, original_path, storage_path, encrypted_aes_key, file_hash, version
                 FROM backups
                 WHERE endpoint_id = %s
+                  AND file_hash NOT IN (
+                      SELECT corrupted_hash FROM incident_evidence WHERE corrupted_hash IS NOT NULL
+                  )
                 ORDER BY original_path, version DESC;
             """
             cur.execute(latest_backups_query, (endpoint_id,))
@@ -43,7 +47,7 @@ def recover_endpoint_files(endpoint_id: str):
                 return {
                     "endpoint_id": endpoint_id,
                     "hostname": hostname,
-                    "message": "No backups found for this endpoint.",
+                    "message": "No clean backups found for this endpoint.",
                     "recovered_files": []
                 }
 
