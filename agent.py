@@ -4,8 +4,12 @@ import time
 import json
 import base64
 import socket
+import threading
+from queue import Queue
 from pathlib import Path
+from collections import deque
 import requests
+import psutil
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -18,8 +22,12 @@ from utils.crypto import (
 
 # Configuration Defaults
 CONFIG_FILE = Path("agent_config.json")
-SANDBOX_DIR = Path("demo_sandbox")
+SANDBOX_DIR = Path("demo_sandbox").resolve()
 DEFAULT_SERVER_URL = "http://127.0.0.1:8000"
+
+# Heuristic Rules
+RATE_WINDOW_SECONDS = 1.5
+RATE_THRESHOLD_MODS = 4  # >= 4 file modifications within 1.5 seconds triggers kill-switch
 
 
 class EndpointAgent:
@@ -27,8 +35,11 @@ class EndpointAgent:
         self.server_url = server_url.rstrip("/")
         self.endpoint_id = None
         self.public_key_pem = None
-        self.file_cache = {}  # {filepath: last_hash} to avoid redundant backups
-        self.paused = False   # Flag to freeze backups if ransomware is detected
+        self.file_cache = {}             # {filepath: clean_sha256}
+        self.paused = False              # Freezes backup uploads when attack is detected
+        self.mod_timestamps = deque()    # Sliding window of modification timestamps
+        self.lock = threading.Lock()
+        self.backup_queue = Queue()      # Background queue for cloud uploads
 
     def initialize(self):
         """Loads configuration or performs handshake registration with backend."""
@@ -45,7 +56,10 @@ class EndpointAgent:
             self.register()
 
         print("[✓] RSA Public Key loaded successfully into agent memory.")
-        self.seed_sample_files()
+        
+        # Start background worker for asynchronous backups so watchdog loop is never blocked
+        t = threading.Thread(target=self._backup_worker, daemon=True)
+        t.start()
 
     def register(self):
         """Performs initial registration handshake with the FastAPI server."""
@@ -64,7 +78,6 @@ class EndpointAgent:
             self.endpoint_id = data["endpoint_id"]
             self.public_key_pem = data["public_key"]
 
-            # Save configuration locally (Private key is NEVER sent to the agent)
             with open(CONFIG_FILE, "w") as f:
                 json.dump({
                     "endpoint_id": self.endpoint_id,
@@ -79,38 +92,131 @@ class EndpointAgent:
             print(f"[!] Registration failed: {e}")
             sys.exit(1)
 
-    def seed_sample_files(self):
-        """Creates realistic demo files if sandbox is empty for testing."""
-        files = list(SANDBOX_DIR.glob("*"))
-        if not files:
-            print("[*] Demo sandbox is empty. Seeding initial files for testing...")
-            sample_data = {
-                "financial_q3.txt": "Confidential Q3 Financial Report\nRevenue: $4,500,000\nProfit Margin: 28%",
-                "customer_records.csv": "id,name,email\n1,Alice,alice@example.com\n2,Bob,bob@example.com",
-                "notes.txt": "Project Akatya Architecture Notes\nHybrid Cryptography + Heuristic Kill-Switch."
+    def record_and_check_heuristic(self) -> bool:
+        """
+        Microsecond-level rate limiter:
+        Returns True if modification rate indicates a ransomware attack.
+        """
+        now = time.time()
+        with self.lock:
+            self.mod_timestamps.append(now)
+            while self.mod_timestamps and (now - self.mod_timestamps[0]) > RATE_WINDOW_SECONDS:
+                self.mod_timestamps.popleft()
+
+            return len(self.mod_timestamps) >= RATE_THRESHOLD_MODS
+
+    def trigger_kill_switch(self):
+        """
+        Heuristic Kill-Switch:
+        1. Freezes backup pipeline immediately.
+        2. Kills offending malicious processes via psutil.
+        3. Gathers digital evidence.
+        4. Transmits alert to FastAPI.
+        """
+        with self.lock:
+            if self.paused:
+                return
+            self.paused = True
+
+        print("\n" + "!" * 65)
+        print("🚨 [ALERT] RAPID FILE MODIFICATION SPIKE DETECTED! INITIATING KILL-SWITCH!")
+        print("!" * 65)
+
+        # Clear any pending backups in the queue
+        while not self.backup_queue.empty():
+            try:
+                self.backup_queue.get_nowait()
+                self.backup_queue.task_done()
+            except Exception:
+                break
+
+        # 1. Terminate offending process
+        killed_processes = []
+        current_pid = os.getpid()
+
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if proc.info['pid'] == current_pid:
+                    continue
+
+                cmdline_str = " ".join(proc.info.get('cmdline') or [])
+                if "simulate_attack.py" in cmdline_str or "ransomware" in cmdline_str.lower():
+                    print(f"[KILL-SWITCH] 🎯 Found offending malicious process: PID {proc.info['pid']} ({cmdline_str})")
+                    p = psutil.Process(proc.info['pid'])
+                    p.kill()
+                    killed_processes.append(f"PID {proc.info['pid']}")
+                    print(f"[KILL-SWITCH] 🛑 Offending process PID {proc.info['pid']} TERMINATED instantly via psutil!")
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        # 2. Gather digital evidence (corrupted files)
+        evidence = []
+        for file_path in SANDBOX_DIR.iterdir():
+            if file_path.is_file() and not file_path.name.startswith("."):
+                try:
+                    with open(file_path, "rb") as f:
+                        content = f.read()
+
+                    cur_hash = compute_sha256(content)
+                    prev_hash = self.file_cache.get(str(file_path))
+
+                    # If corrupted with ransomware marker or changed
+                    if b"[LOCKED_BY_RANSOMWARE" in content or (prev_hash and cur_hash != prev_hash):
+                        evidence.append({
+                            "corrupted_filepath": file_path.name,
+                            "corrupted_hash": cur_hash
+                        })
+                except Exception as read_err:
+                    print(f"[!] Error reading evidence file '{file_path.name}': {read_err}")
+
+        print(f"[EVIDENCE] Cataloged {len(evidence)} corrupted file(s) for forensic preservation.")
+
+        # 3. Report incident to FastAPI
+        try:
+            incident_payload = {
+                "endpoint_id": self.endpoint_id,
+                "process_killed": len(killed_processes) > 0,
+                "evidence": evidence
             }
-            for name, content in sample_data.items():
-                file_path = SANDBOX_DIR / name
-                file_path.write_text(content)
-            print("[✓] Seeded 3 sample files into ./demo_sandbox")
+            resp = requests.post(f"{self.server_url}/api/incident", json=incident_payload, timeout=10)
+            if resp.status_code == 200:
+                inc_data = resp.json()
+                print(f"[✓] Incident successfully logged to Supabase! Incident ID: {inc_data['incident_id']}")
+            else:
+                print(f"[!] Failed to log incident: {resp.text}")
+        except Exception as net_err:
+            print(f"[!] Error transmitting incident alert: {net_err}")
+
+        print("=" * 65)
+        print("🛑 SYSTEM LOCKED: Backup pipeline frozen. Ready for admin forensic report & recovery.")
+        print("=" * 65 + "\n")
+
+    def queue_backup(self, file_path: Path):
+        """Enqueues file for background backup if agent is healthy."""
+        if not self.paused:
+            self.backup_queue.put(file_path)
+
+    def _backup_worker(self):
+        """Background thread worker that executes cloud uploads without blocking watchdog."""
+        while True:
+            file_path = self.backup_queue.get()
+            if self.paused:
+                self.backup_queue.task_done()
+                continue
+
+            try:
+                self.encrypt_and_backup(file_path)
+            except Exception as e:
+                print(f"[!] Backup worker error: {e}")
+            finally:
+                self.backup_queue.task_done()
 
     def encrypt_and_backup(self, file_path: Path):
-        """
-        Hybrid Encryption Pipeline:
-        1. Reads file bytes and computes clean SHA-256 hash.
-        2. Encrypts file data using AES-GCM (random 256-bit AES key).
-        3. Encrypts AES key using server's RSA Public Key (OAEP SHA-256).
-        4. Uploads both to FastAPI server.
-        """
+        """Performs hybrid encryption and uploads to FastAPI."""
         if self.paused:
-            print(f"[!] Backup skipped (Agent is paused/threat locked): {file_path.name}")
             return
 
-        if not file_path.is_file():
-            return
-
-        # Ignore hidden/system files
-        if file_path.name.startswith("."):
+        if not file_path.is_file() or file_path.name.startswith("."):
             return
 
         try:
@@ -120,20 +226,18 @@ class EndpointAgent:
             if not file_bytes:
                 return
 
-            # Compute clean SHA-256 hash
             file_hash = compute_sha256(file_bytes)
 
-            # Debounce check: don't backup if content hasn't changed
+            # Avoid redundant uploads
             if self.file_cache.get(str(file_path)) == file_hash:
                 return
 
-            # 1. AES-GCM encryption of file
+            # AES-GCM encryption
             encrypted_data, aes_key = encrypt_aes_gcm(file_bytes)
 
-            # 2. RSA-OAEP encryption of AES key
+            # RSA-OAEP key encryption
             encrypted_aes_key = encrypt_rsa_oaep(aes_key, self.public_key_pem)
 
-            # 3. Base64 encode for JSON payload
             payload = {
                 "endpoint_id": self.endpoint_id,
                 "original_path": str(file_path.name),
@@ -142,40 +246,40 @@ class EndpointAgent:
                 "encrypted_data_b64": base64.b64encode(encrypted_data).decode("utf-8")
             }
 
-            resp = requests.post(f"{self.server_url}/api/backup", json=payload, timeout=10)
+            resp = requests.post(f"{self.server_url}/api/backup", json=payload, timeout=15)
             if resp.status_code == 200:
                 result = resp.json()
                 self.file_cache[str(file_path)] = file_hash
-                print(f"[✓] Securely backed up '{file_path.name}' (Version {result['version']}, SHA-256: {file_hash[:12]}...)")
-            else:
-                print(f"[!] Backup failed for '{file_path.name}': {resp.text}")
+                print(f"[✓] Securely backed up '{file_path.name}' (v{result['version']}, SHA: {file_hash[:10]}...)")
 
         except Exception as e:
-            print(f"[!] Error processing '{file_path.name}': {e}")
+            if not self.paused:
+                print(f"[!] Error backing up '{file_path.name}': {e}")
 
 
 class SandboxChangeHandler(FileSystemEventHandler):
-    """Watchdog event handler that forwards file modifications to the agent."""
+    """Watches sandbox directory and intercepts rapid modification bursts."""
     def __init__(self, agent: EndpointAgent):
         super().__init__()
         self.agent = agent
-        self.last_events = {}
 
     def on_created(self, event):
         if not event.is_directory:
-            self._handle_event(event.src_path)
+            self._process_event(event.src_path)
 
     def on_modified(self, event):
         if not event.is_directory:
-            self._handle_event(event.src_path)
+            self._process_event(event.src_path)
 
-    def _handle_event(self, path_str: str):
-        now = time.time()
-        # Debounce to prevent multiple triggers from OS write flushes within 0.3s
-        if path_str in self.last_events and (now - self.last_events[path_str]) < 0.3:
+    def _process_event(self, path_str: str):
+        # 1. Check rate heuristic immediately
+        is_attack = self.agent.record_and_check_heuristic()
+        if is_attack:
+            self.agent.trigger_kill_switch()
             return
-        self.last_events[path_str] = now
-        self.agent.encrypt_and_backup(Path(path_str))
+
+        # 2. Queue for asynchronous background upload
+        self.agent.queue_backup(Path(path_str))
 
 
 def start_agent():
@@ -186,11 +290,11 @@ def start_agent():
     agent = EndpointAgent()
     agent.initialize()
 
-    # Initial backup pass for all existing sandbox files
+    # Initial backup pass for all clean files in sandbox
     print("\n[*] Performing initial synchronization of sandbox files...")
     for item in SANDBOX_DIR.iterdir():
         if item.is_file() and not item.name.startswith("."):
-            agent.encrypt_and_backup(item)
+            agent.queue_backup(item)
 
     # Start Watchdog observer
     event_handler = SandboxChangeHandler(agent)
@@ -199,6 +303,7 @@ def start_agent():
     observer.start()
 
     print(f"\n[✓] Agent is actively monitoring '{SANDBOX_DIR.resolve()}'")
+    print("[*] Heuristic Kill-Switch ACTIVE (>= 4 file modifications in 1.5s)")
     print("[*] Press Ctrl+C to stop.")
 
     try:

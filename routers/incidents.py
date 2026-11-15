@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from typing import List, Dict, Any
 from models.incident import (
     IncidentReportRequest, IncidentResponse, IncidentItem, EvidenceItem
 )
 from utils.db import get_db_cursor
+from utils.report import generate_section_65b_pdf
 
 router = APIRouter(tags=["Incidents"])
 
@@ -134,3 +135,80 @@ def get_incident_details(incident_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch incident details: {str(e)}")
 
+
+@router.get("/api/incidents/{incident_id}/report")
+def download_incident_report(incident_id: str):
+    """
+    Compiles and returns an official Section 65B Digital Evidence Certificate PDF.
+    Cross-references corrupted file hashes against clean backup hashes in Supabase.
+    Marks `report_generated = TRUE` in the database.
+    """
+    try:
+        with get_db_cursor(commit=True) as cur:
+            # 1. Fetch Incident details
+            cur.execute("""
+                SELECT i.id, i.endpoint_id, e.hostname, i.attack_timestamp, i.process_killed
+                FROM incidents i
+                JOIN endpoints e ON i.endpoint_id = e.id
+                WHERE i.id = %s;
+            """, (incident_id,))
+            inc = cur.fetchone()
+            if not inc:
+                raise HTTPException(status_code=404, detail="Incident not found")
+
+            incident_data = {
+                "id": str(inc[0]),
+                "endpoint_id": str(inc[1]),
+                "hostname": inc[2],
+                "attack_timestamp": inc[3].isoformat() if inc[3] else "Unknown",
+                "process_killed": inc[4]
+            }
+
+            # 2. Fetch Evidence items & pair with clean backup hash
+            cur.execute("""
+                SELECT corrupted_filepath, corrupted_hash
+                FROM incident_evidence
+                WHERE incident_id = %s;
+            """, (incident_id,))
+            ev_records = cur.fetchall()
+
+            evidence_rows = []
+            for ev in ev_records:
+                filepath, corrupt_hash = ev[0], ev[1]
+
+                # Query latest clean backup hash for this file
+                cur.execute("""
+                    SELECT file_hash, version
+                    FROM backups
+                    WHERE endpoint_id = %s AND original_path = %s
+                    ORDER BY version DESC LIMIT 1;
+                """, (incident_data["endpoint_id"], filepath))
+                b_row = cur.fetchone()
+
+                clean_hash = b_row[0] if b_row else None
+                evidence_rows.append({
+                    "corrupted_filepath": filepath,
+                    "corrupted_hash": corrupt_hash,
+                    "clean_hash": clean_hash
+                })
+
+            # 3. Generate Programmatic Section 65B PDF (Deterministic, No AI/LLM)
+            pdf_bytes = generate_section_65b_pdf(incident_data, evidence_rows)
+
+            # 4. Mark report as generated in Supabase
+            cur.execute("UPDATE incidents SET report_generated = TRUE WHERE id = %s;", (incident_id,))
+
+            filename = f"Section_65B_Certificate_{incident_id[:8]}.pdf"
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "Access-Control-Expose-Headers": "Content-Disposition"
+                }
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate forensic report: {str(e)}")

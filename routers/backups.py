@@ -3,11 +3,9 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from models.backup import BackupRequest, BackupResponse, BackupListResponse, BackupItem
 from utils.db import get_db_cursor
+from utils.storage import upload_to_storage
 
 router = APIRouter(tags=["Backups"])
-
-VAULT_DIR = Path("vault_storage")
-VAULT_DIR.mkdir(exist_ok=True)
 
 
 @router.post("/api/backup", response_model=BackupResponse)
@@ -16,8 +14,8 @@ def upload_backup(payload: BackupRequest):
     Receives an encrypted file from an endpoint:
     1. Verifies endpoint existence.
     2. Calculates next version for this file.
-    3. Writes AES-encrypted file to server vault storage.
-    4. Records metadata in Supabase PostgreSQL (backups table).
+    3. Uploads AES-encrypted payload directly to Supabase Storage bucket 'akatya-backups'.
+    4. Records metadata and storage path in Supabase PostgreSQL (backups table).
     """
     try:
         with get_db_cursor(commit=True) as cur:
@@ -34,19 +32,15 @@ def upload_backup(payload: BackupRequest):
             current_version = cur.fetchone()[0]
             new_version = current_version + 1
 
-            # Decode and write encrypted payload to disk
+            # Decode encrypted bytes
             encrypted_bytes = base64.b64decode(payload.encrypted_data_b64)
-            endpoint_vault = VAULT_DIR / payload.endpoint_id
-            endpoint_vault.mkdir(parents=True, exist_ok=True)
 
+            # Upload directly to Supabase Cloud Storage bucket (akatya-backups)
             safe_filename = Path(payload.original_path).name
-            storage_filename = f"v{new_version}_{safe_filename}.enc"
-            disk_path = endpoint_vault / storage_filename
+            storage_object_name = f"{payload.endpoint_id}/v{new_version}_{safe_filename}.enc"
+            storage_path_str = upload_to_storage(storage_object_name, encrypted_bytes)
 
-            with open(disk_path, "wb") as f:
-                f.write(encrypted_bytes)
-
-            # Insert metadata into Supabase
+            # Insert metadata into Supabase PostgreSQL
             insert_query = """
                 INSERT INTO backups (endpoint_id, original_path, storage_path, encrypted_aes_key, file_hash, version)
                 VALUES (%s, %s, %s, %s, %s, %s)
@@ -54,7 +48,7 @@ def upload_backup(payload: BackupRequest):
             """
             cur.execute(
                 insert_query,
-                (payload.endpoint_id, payload.original_path, str(disk_path), payload.encrypted_aes_key, payload.file_hash, new_version)
+                (payload.endpoint_id, payload.original_path, storage_path_str, payload.encrypted_aes_key, payload.file_hash, new_version)
             )
             row = cur.fetchone()
 
@@ -95,4 +89,3 @@ def list_backups(endpoint_id: str):
             return BackupListResponse(backups=backups)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch backups: {str(e)}")
-

@@ -6,3 +6,4 @@ cryptography
 requests
 watchdog
 psutil
+fpdf2
