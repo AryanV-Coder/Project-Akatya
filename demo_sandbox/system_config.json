@@ -1,4 +1,7 @@
-[LOCKED_BY_RANSOMWARE_AKATYA_TEST]
-CRITICAL WARNING: Your sensitive documents have been encrypted.
-Deposit 0.5 BTC to 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
-+Ëÿ¥(Ú”ùw†&nG4nX6µõJP™XcsDødÇL”5ˆ!Ê^ú@+Q¡BeqVÁkü(Ã§Ê›~Œ4Åû"¤øŸŒ©Î„ÓÂn›KNr÷%ú!2´+2¸„‡ˆlª“ÙÊXbÁÿJõD.mT	¢O,Ú¤QÅëzÎ/?„İ–÷]+lc¿ÆkK.ñª•.»¨~|œD\¡º³ƒÊ|€jrê'á‚¯vRÅ$µàÿ‹qË€=’~™_Æ|—ŞûgÔ@=â5µ€Ğ·]İÓlş"4áøª“M»Ù\‡Ñg[lµf%ğM±ƒO\wÜ
+{
+    "environment": "production-demo",
+    "database_cluster": "pgsql-primary-aus",
+    "backup_cadence_seconds": 2,
+    "encryption_algorithm": "AES-256-GCM",
+    "key_management": "RSA-2048 Asymmetric"
+}
