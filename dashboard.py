@@ -273,19 +273,18 @@ with tab_recovery:
                             
                             restored_table = []
                             sandbox_path = Path("demo_sandbox")
-                            restored_folder = Path("restored_files")
-                            restored_folder.mkdir(exist_ok=True)
+
+                            if restore_to_sandbox:
+                                target_folder = sandbox_path
+                            else:
+                                target_folder = Path("restored_files")
+                                target_folder.mkdir(exist_ok=True)
 
                             for f_item in files:
                                 fname = f_item["filename"]
                                 content_bytes = base64.b64decode(f_item["content_b64"])
                                 
-                                # Always save to restored_files
-                                (restored_folder / fname).write_bytes(content_bytes)
-
-                                # Optionally overwrite demo_sandbox
-                                if restore_to_sandbox:
-                                    (sandbox_path / fname).write_bytes(content_bytes)
+                                (target_folder / fname).write_bytes(content_bytes)
 
                                 restored_table.append({
                                     "File Name": fname,
@@ -299,7 +298,7 @@ with tab_recovery:
                             if restore_to_sandbox:
                                 st.info("📁 All recovered clean files have been written directly back to `./demo_sandbox`!")
                             else:
-                                st.info("📁 Clean files restored to `./restored_files` directory.")
+                                st.info(f"📁 Clean files restored to `./{target_folder.name}` directory.")
                         else:
                             st.warning("No files found to recover.")
                     else:
