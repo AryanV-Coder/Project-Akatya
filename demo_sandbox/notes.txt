@@ -1,8 +1,5 @@
-Project Akatya - Architecture & Operations Notes
-=================================================
-Core Defense Mechanisms:
-1. Real-Time Watchdog Monitoring on Local Directory
-2. Hybrid Asymmetric Pipeline (AES-256-GCM + RSA-2048-OAEP)
-3. Heuristic Kill-Switch (>4 rapid modifications/sec -> SIGKILL)
-4. Supabase Cloud Storage Vault (akatya-backups)
-5. Section 65B Electronic Evidence Certification
+[LOCKED_BY_RANSOMWARE_AKATYA_TEST]
+CRITICAL WARNING: Your sensitive documents have been encrypted.
+Deposit 0.5 BTC to 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
+QÑ§†îöÞ›XªÝyïuÁï“Î,ÛdJXÚKùêdhÅ¬Ö]ØT6@LÒl1Òõžïù—”+b'aZ¬R>ë!N|M'çlÚ¬>›GäîñP…ÇgìT—´0¶ ú:íÅÏ‚†Ÿ¬é¼1|Î"$òÛ|”üƒS'P„62'%Å`q@š½âÉ¤š´u‘r¢§0ãApÏ™f<Å_COõ›”ßåà„|[²Ø.¾>ÒÍq; ÉT3hå0„„åÐF¤,Zè3“²9tÕ‚‹æãÂ
+ÉF+<©Š}3=ÒHƒo‡ 5°·y*„rp/$Ñ3™þîž5gM³A¨ï¼

@@ -1,10 +1,42 @@
 import base64
+import concurrent.futures
 from fastapi import APIRouter, HTTPException
 from utils.db import get_db_cursor
 from utils.crypto import decrypt_rsa_oaep, decrypt_aes_gcm, compute_sha256
 from utils.storage import download_from_storage
 
 router = APIRouter(tags=["Recovery"])
+
+
+def _recover_single_file(row, private_key_pem):
+    """Worker function to download and decrypt a single file in parallel."""
+    backup_id, original_path, storage_path_str, enc_aes_key_b64, expected_hash, version = row
+    try:
+        # Download encrypted file directly from Supabase Object Storage
+        encrypted_blob = download_from_storage(storage_path_str)
+
+        # Decrypt AES key with RSA Private Key
+        enc_aes_key = base64.b64decode(enc_aes_key_b64)
+        aes_key = decrypt_rsa_oaep(enc_aes_key, private_key_pem)
+
+        # Decrypt file content with AES-GCM
+        decrypted_bytes = decrypt_aes_gcm(encrypted_blob, aes_key)
+
+        # Verify SHA-256 integrity
+        calculated_hash = compute_sha256(decrypted_bytes)
+        hash_verified = (calculated_hash == expected_hash)
+
+        return {
+            "filename": original_path,
+            "version": version,
+            "storage_path": storage_path_str,
+            "hash_verified": hash_verified,
+            "sha256": calculated_hash,
+            "content_b64": base64.b64encode(decrypted_bytes).decode("utf-8")
+        }
+    except Exception as file_err:
+        print(f"[!] Error recovering file '{original_path}': {file_err}")
+        return None
 
 
 @router.post("/api/recover/{endpoint_id}")
@@ -14,7 +46,7 @@ def recover_endpoint_files(endpoint_id: str):
     1. Fetches the endpoint's securely stored RSA Private Key from Supabase PostgreSQL.
     2. Queries the latest CLEAN version of each file, strictly excluding any versions
        marked as compromised in `incident_evidence`.
-    3. Downloads encrypted ciphertext directly from Supabase Storage bucket 'akatya-backups'.
+    3. Downloads encrypted ciphertext directly from Supabase Storage bucket 'akatya-backups' in parallel.
     4. Decrypts AES key using the RSA Private Key.
     5. Decrypts file content using AES-GCM and verifies SHA-256 hash.
     6. Returns clean files payload.
@@ -52,35 +84,17 @@ def recover_endpoint_files(endpoint_id: str):
                 }
 
             recovered_files = []
-            for r in rows:
-                backup_id, original_path, storage_path_str, enc_aes_key_b64, expected_hash, version = r
+            # Download and decrypt files concurrently using a thread pool
+            max_workers = min(10, len(rows))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [executor.submit(_recover_single_file, r, private_key_pem) for r in rows]
+                for fut in concurrent.futures.as_completed(futures):
+                    res = fut.result()
+                    if res:
+                        recovered_files.append(res)
 
-                try:
-                    # Download encrypted file directly from Supabase Object Storage
-                    encrypted_blob = download_from_storage(storage_path_str)
-
-                    # Decrypt AES key with RSA Private Key
-                    enc_aes_key = base64.b64decode(enc_aes_key_b64)
-                    aes_key = decrypt_rsa_oaep(enc_aes_key, private_key_pem)
-
-                    # Decrypt file content with AES-GCM
-                    decrypted_bytes = decrypt_aes_gcm(encrypted_blob, aes_key)
-
-                    # Verify SHA-256 integrity
-                    calculated_hash = compute_sha256(decrypted_bytes)
-                    hash_verified = (calculated_hash == expected_hash)
-
-                    recovered_files.append({
-                        "filename": original_path,
-                        "version": version,
-                        "storage_path": storage_path_str,
-                        "hash_verified": hash_verified,
-                        "sha256": calculated_hash,
-                        "content_b64": base64.b64encode(decrypted_bytes).decode("utf-8")
-                    })
-                except Exception as file_err:
-                    print(f"[!] Error recovering file '{original_path}': {file_err}")
-                    continue
+            # Deterministic ordering by filename
+            recovered_files.sort(key=lambda x: x["filename"])
 
             return {
                 "endpoint_id": endpoint_id,
@@ -94,3 +108,4 @@ def recover_endpoint_files(endpoint_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Recovery failed: {str(e)}")
+

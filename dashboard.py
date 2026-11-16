@@ -262,7 +262,7 @@ with tab_recovery:
         if st.button("🚀 Initiate Cloud Recovery & Decrypt Files", type="primary"):
             with st.spinner("Retrieving ciphertext from Supabase bucket & decrypting with RSA Private Key..."):
                 try:
-                    rec_resp = requests.post(f"{SERVER_URL}/api/recover/{rec_endpoint}", timeout=20)
+                    rec_resp = requests.post(f"{SERVER_URL}/api/recover/{rec_endpoint}", timeout=60)
                     if rec_resp.status_code == 200:
                         rec_data = rec_resp.json()
                         st.success(f"✅ {rec_data.get('message')}")
