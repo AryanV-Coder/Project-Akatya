@@ -180,11 +180,11 @@ with tab_incidents:
                             file_name=f"Section_65B_Certificate_{inc_id[:8]}.pdf",
                             mime="application/pdf",
                             key=f"dl_{inc_id}",
-                            use_container_width=True
+                            width="stretch"
                         )
                     else:
                         st.warning("Report generating...")
-                        if st.button("🔄 Retry / Generate", key=f"retry_{inc_id}", use_container_width=True):
+                        if st.button("🔄 Retry / Generate", key=f"retry_{inc_id}", width="stretch"):
                             st.cache_data.clear()
                             st.rerun()
 
@@ -198,7 +198,7 @@ with tab_incidents:
                             df_ev = pd.DataFrame(ev_list)
                             df_ev = df_ev[["corrupted_filepath", "corrupted_hash"]]
                             df_ev.columns = ["Target File Name", "Corrupted File Hash (SHA-256)"]
-                            st.dataframe(df_ev, use_container_width=True, hide_index=True)
+                            st.dataframe(df_ev, width="stretch", hide_index=True)
                 except Exception:
                     pass
 
@@ -214,7 +214,7 @@ with tab_endpoints:
             df_ep["created_at"] = df_ep["created_at"].apply(to_ist_string)
         df_ep_display = df_ep[["hostname", "id", "status", "created_at"]]
         df_ep_display.columns = ["Hostname", "Endpoint UUID", "Status", "Registered At (IST)"]
-        st.dataframe(df_ep_display, use_container_width=True, hide_index=True)
+        st.dataframe(df_ep_display, width="stretch", hide_index=True)
 
         st.markdown("---")
         st.subheader("Inspect Vault Backups")
@@ -235,7 +235,7 @@ with tab_endpoints:
                             df_b["backed_up_at"] = df_b["backed_up_at"].apply(to_ist_string)
                         df_b = df_b[["original_path", "version", "file_hash", "backed_up_at"]]
                         df_b.columns = ["File Name", "Append-Only Version", "Clean SHA-256 Hash", "Backed Up At (IST)"]
-                        st.dataframe(df_b, use_container_width=True, hide_index=True)
+                        st.dataframe(df_b, width="stretch", hide_index=True)
                     else:
                         st.info("No files backed up yet for this endpoint.")
             except Exception as e:
@@ -294,7 +294,7 @@ with tab_recovery:
                                     "Clean SHA-256": f_item["sha256"][:24] + "..."
                                 })
 
-                            st.dataframe(pd.DataFrame(restored_table), use_container_width=True, hide_index=True)
+                            st.dataframe(pd.DataFrame(restored_table), width="stretch", hide_index=True)
 
                             if restore_to_sandbox:
                                 st.info("📁 All recovered clean files have been written directly back to `./demo_sandbox`!")
