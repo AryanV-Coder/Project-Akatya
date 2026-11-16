@@ -1,0 +1,7 @@
+{
+    "environment": "production-demo",
+    "database_cluster": "pgsql-primary-aus",
+    "backup_cadence_seconds": 2,
+    "encryption_algorithm": "AES-256-GCM",
+    "key_management": "RSA-2048 Asymmetric"
+}

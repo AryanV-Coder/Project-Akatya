@@ -16,15 +16,15 @@ def run_ransomware_simulation():
     if not SANDBOX_DIR.exists():
         SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Ensure there are at least 15 target files to simulate a multi-file attack
-    print("[*] Preparing test environment in demo_sandbox...")
-    for i in range(1, 16):
-        target = SANDBOX_DIR / f"work_file_{i}.txt"
-        if not target.exists():
-            target.write_text(f"Important company document #{i}\nFinancial and operational data: {i * 1000}")
-
     target_files = sorted([f for f in SANDBOX_DIR.iterdir() if f.is_file() and not f.name.startswith(".")])
-    print(f"[*] Found {len(target_files)} target files in sandbox.")
+    if not target_files:
+        print("[*] Sandbox is empty. Creating sample documents for attack simulation...")
+        for i in range(1, 6):
+            target = SANDBOX_DIR / f"enterprise_doc_{i}.txt"
+            target.write_text(f"Enterprise Document #{i}\nConfidential Record ID: {1000 + i}")
+        target_files = sorted([f for f in SANDBOX_DIR.iterdir() if f.is_file() and not f.name.startswith(".")])
+
+    print(f"[*] Found {len(target_files)} target file(s) in sandbox.")
     print("[*] Commencing rapid encryption attack (>5 modifications/second)...")
     print("[*] Attempting to encrypt all files before defense system reacts...\n")
 

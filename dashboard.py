@@ -3,6 +3,27 @@ import requests
 import pandas as pd
 import base64
 from pathlib import Path
+from datetime import datetime, timezone, timedelta
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def to_ist_string(dt_or_str) -> str:
+    """Converts UTC datetime/ISO string to formatted Indian Standard Time (IST)."""
+    if not dt_or_str:
+        return "N/A"
+    try:
+        if isinstance(dt_or_str, str):
+            clean_str = dt_or_str.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(clean_str)
+        else:
+            dt = dt_or_str
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        dt_ist = dt.astimezone(IST)
+        return dt_ist.strftime("%d-%b-%Y %I:%M:%S %p IST")
+    except Exception:
+        return str(dt_or_str)[:19].replace("T", " ") + " IST"
 
 # Page Configuration
 st.set_page_config(
@@ -116,7 +137,7 @@ if active_attacks:
     st.error(f"""
     🚨 **CRITICAL SECURITY ALERT: RANSOMWARE ATTACK INTERCEPTED**
     - **Target Hostname:** `{latest.get('hostname')}` (ID: `{latest.get('endpoint_id')}`)
-    - **Timestamp:** `{latest.get('attack_timestamp')}`
+    - **Timestamp:** `{to_ist_string(latest.get('attack_timestamp'))}`
     - **Kill-Switch Action:** {'✅ Offending Process KILLED (SIGKILL via psutil)' if latest.get('process_killed') else '⚠️ Process Status Unknown'}
     - **Evidence Collected:** `{latest.get('evidence_count')}` corrupted files cataloged for forensic investigation
     - **Cloud Vault Status:** 🔒 Frozen to prevent backup contamination
@@ -138,10 +159,10 @@ with tab_incidents:
     else:
         for inc in incidents:
             inc_id = inc["id"]
-            timestamp_str = inc.get("attack_timestamp", "")[:19].replace("T", " ")
+            timestamp_str = to_ist_string(inc.get("attack_timestamp"))
             status_badge = "🔴 ATTACK INTERCEPTED" if inc.get("process_killed") else "⚠️ ALERT"
 
-            with st.expander(f"{status_badge} — Host: {inc.get('hostname')} | {timestamp_str} UTC", expanded=True):
+            with st.expander(f"{status_badge} — Host: {inc.get('hostname')} | {timestamp_str}", expanded=True):
                 col_info, col_actions = st.columns([2, 1])
 
                 with col_info:
@@ -189,8 +210,10 @@ with tab_endpoints:
         st.info("No endpoints registered yet. Run `agent.py` on target machines to register.")
     else:
         df_ep = pd.DataFrame(endpoints)
+        if "created_at" in df_ep.columns:
+            df_ep["created_at"] = df_ep["created_at"].apply(to_ist_string)
         df_ep_display = df_ep[["hostname", "id", "status", "created_at"]]
-        df_ep_display.columns = ["Hostname", "Endpoint UUID", "Status", "Registered At"]
+        df_ep_display.columns = ["Hostname", "Endpoint UUID", "Status", "Registered At (IST)"]
         st.dataframe(df_ep_display, use_container_width=True, hide_index=True)
 
         st.markdown("---")
@@ -208,8 +231,10 @@ with tab_endpoints:
                     backups = b_resp.json().get("backups", [])
                     if backups:
                         df_b = pd.DataFrame(backups)
+                        if "backed_up_at" in df_b.columns:
+                            df_b["backed_up_at"] = df_b["backed_up_at"].apply(to_ist_string)
                         df_b = df_b[["original_path", "version", "file_hash", "backed_up_at"]]
-                        df_b.columns = ["File Name", "Append-Only Version", "Clean SHA-256 Hash", "Backed Up At"]
+                        df_b.columns = ["File Name", "Append-Only Version", "Clean SHA-256 Hash", "Backed Up At (IST)"]
                         st.dataframe(df_b, use_container_width=True, hide_index=True)
                     else:
                         st.info("No files backed up yet for this endpoint.")

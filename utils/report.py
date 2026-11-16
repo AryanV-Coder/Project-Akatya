@@ -1,6 +1,26 @@
-import datetime
+from datetime import datetime, timezone, timedelta
 from fpdf import FPDF
 from utils.crypto import compute_sha256
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def to_ist_string(dt_or_str) -> str:
+    """Converts UTC datetime/ISO string to formatted Indian Standard Time (IST)."""
+    if not dt_or_str:
+        return "N/A"
+    try:
+        if isinstance(dt_or_str, str):
+            clean_str = dt_or_str.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(clean_str)
+        else:
+            dt = dt_or_str
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        dt_ist = dt.astimezone(IST)
+        return dt_ist.strftime("%d-%b-%Y %I:%M:%S %p IST")
+    except Exception:
+        return str(dt_or_str)[:19].replace("T", " ") + " IST"
 
 
 class Section65BPDF(FPDF):
@@ -85,7 +105,7 @@ def generate_section_65b_pdf(incident_data: dict, evidence_rows: list) -> bytes:
     pdf.set_font("Helvetica", "B", 8)
     pdf.cell(26, 5.5, "Attack Time:", border=0, ln=0)
     pdf.set_font("Helvetica", "", 8)
-    pdf.cell(65, 5.5, str(incident_data.get("attack_timestamp", "N/A"))[:19].replace("T", " ") + " UTC", border=0, ln=1)
+    pdf.cell(65, 5.5, to_ist_string(incident_data.get("attack_timestamp")), border=0, ln=1)
 
     # Row 3: Process Neutralization & Forensic Status
     curr_y += 6.5
@@ -228,7 +248,7 @@ def generate_section_65b_pdf(incident_data: dict, evidence_rows: list) -> bytes:
     pdf.line(12, pdf.get_y(), 198, pdf.get_y())
     pdf.ln(2.5)
 
-    cert_time = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    cert_time = to_ist_string(datetime.now(timezone.utc))
     report_raw = f"{incident_data.get('id')}:{incident_data.get('endpoint_id')}:{cert_time}"
     cert_checksum = compute_sha256(report_raw.encode("utf-8"))
 
