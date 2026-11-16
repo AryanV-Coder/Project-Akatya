@@ -78,6 +78,18 @@ def fetch_incidents():
         return []
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def get_incident_report(server_url: str, incident_id: str):
+    """Caches PDF report in memory to avoid redundant heavy requests."""
+    try:
+        resp = requests.get(f"{server_url}/api/incidents/{incident_id}/report", timeout=60)
+        if resp.status_code == 200:
+            return resp.content
+        return None
+    except Exception:
+        return None
+
+
 endpoints = fetch_endpoints()
 incidents = fetch_incidents()
 
@@ -139,24 +151,21 @@ with tab_incidents:
                     st.write(f"**Digital Evidence Records:** {inc.get('evidence_count')} file(s)")
 
                 with col_actions:
-                    # Button to fetch and download Section 65B Legal Certificate PDF
-                    report_url = f"{SERVER_URL}/api/incidents/{inc_id}/report"
-                    
-                    try:
-                        pdf_resp = requests.get(report_url, timeout=10)
-                        if pdf_resp.status_code == 200:
-                            st.download_button(
-                                label="📄 Download Section 65B PDF",
-                                data=pdf_resp.content,
-                                file_name=f"Section_65B_Certificate_{inc_id[:8]}.pdf",
-                                mime="application/pdf",
-                                key=f"dl_{inc_id}",
-                                use_container_width=True
-                            )
-                        else:
-                            st.button("⚠️ Report Unavailable", disabled=True, key=f"err_{inc_id}")
-                    except Exception as e:
-                        st.caption(f"Error loading report: {e}")
+                    pdf_data = get_incident_report(SERVER_URL, inc_id)
+                    if pdf_data:
+                        st.download_button(
+                            label="📄 Download Section 65B PDF",
+                            data=pdf_data,
+                            file_name=f"Section_65B_Certificate_{inc_id[:8]}.pdf",
+                            mime="application/pdf",
+                            key=f"dl_{inc_id}",
+                            use_container_width=True
+                        )
+                    else:
+                        st.warning("Report generating...")
+                        if st.button("🔄 Retry / Generate", key=f"retry_{inc_id}", use_container_width=True):
+                            st.cache_data.clear()
+                            st.rerun()
 
                 # Show Evidence Table
                 try:

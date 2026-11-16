@@ -164,7 +164,7 @@ def download_incident_report(incident_id: str):
                 "process_killed": inc[4]
             }
 
-            # 2. Fetch Evidence items & pair with clean backup hash
+            # 2. Fetch Evidence items & pair with clean backup hash in ONE single fast batch
             cur.execute("""
                 SELECT corrupted_filepath, corrupted_hash
                 FROM incident_evidence
@@ -172,24 +172,23 @@ def download_incident_report(incident_id: str):
             """, (incident_id,))
             ev_records = cur.fetchall()
 
+            # Fetch all backups for this endpoint in ONE round-trip
+            cur.execute("""
+                SELECT original_path, file_hash
+                FROM backups
+                WHERE endpoint_id = %s
+                ORDER BY version DESC;
+            """, (incident_data["endpoint_id"],))
+            backup_rows = cur.fetchall()
+            clean_hash_map = {b[0]: b[1] for b in backup_rows}
+
             evidence_rows = []
             for ev in ev_records:
                 filepath, corrupt_hash = ev[0], ev[1]
-
-                # Query latest clean backup hash for this file
-                cur.execute("""
-                    SELECT file_hash, version
-                    FROM backups
-                    WHERE endpoint_id = %s AND original_path = %s
-                    ORDER BY version DESC LIMIT 1;
-                """, (incident_data["endpoint_id"], filepath))
-                b_row = cur.fetchone()
-
-                clean_hash = b_row[0] if b_row else None
                 evidence_rows.append({
                     "corrupted_filepath": filepath,
                     "corrupted_hash": corrupt_hash,
-                    "clean_hash": clean_hash
+                    "clean_hash": clean_hash_map.get(filepath)
                 })
 
             # 3. Generate Programmatic Section 65B PDF (Deterministic, No AI/LLM)
