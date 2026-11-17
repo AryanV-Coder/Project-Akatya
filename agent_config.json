@@ -1,6 +1,6 @@
 {
-    "endpoint_id": "3106fa2e-67dc-42eb-b998-cd92a57cd0e9",
+    "endpoint_id": "172f1cf9-dafc-45a0-8274-765aca60aa77",
     "hostname": "Aryans-MacBook-Pro.local",
-    "public_key": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtg57B+vAyBSshqE7IDuE\n37nQVCBwt//JLtFzF1PgM7V9wGANT+Vf0/8cuBYyC6k07/y++t36P5BVAXu7zbmS\nhWdlkPS0rVtOR2NwfQtM1C7iFTjY0FDoQHmE2i8OZzULS0ogQ33xRJLCBZUnOGOm\n3WgauYb92i2q/+L7wOPwGLgd1UedyUwehzsA8r5eQtDyfdHzrxAe1UEPp/K7rtFB\n4fdyDNn5BOnKH9vQRRqcTUgLLu7TYkKk3qF2TIlDZc+F4R92XUiIuaG6q9/+8nUC\nH3q8VNPjxxhoG3o1s6FAwqJQNeFCoG+RZfzSawhwHBqvP/yi8FqnQHCe7JSCobJ/\noQIDAQAB\n-----END PUBLIC KEY-----\n",
+    "public_key": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz1NeHZezENkvn+duCI7C\nwSXtMGgrFiST4QfrKXp7KFlAxyv2RqD5oiHGlJxszhR+GeWDLeu3Mis5AwMh/1KW\nlNo7cpycDr+5eMUatn4JfbNKUr13cDVPtmUL2lAD37aLO5DOl3u/hZY111YM6SlN\nIqc/6LjVdryBJ67zpIYjFE0tlNz6lT1Z7uX58Aee8y0JlNw79KS1TiAL/M29Sr4u\nafcNDEWqYMgb2NqGbexHPVuu3c2yDd2jjAItGN5LjZDPY8SfqmjNXT9JjZiNM4m5\nW7DjE0tWxlspG9DNHMOP0HM5mu7eG7Mh/mlGXsafg/HxTnyAcP+L8D9fFNZjfwiP\nRwIDAQAB\n-----END PUBLIC KEY-----\n",
     "server_url": "http://127.0.0.1:8000"
 }
