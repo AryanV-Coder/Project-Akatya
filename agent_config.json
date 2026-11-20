@@ -1,6 +1,0 @@
-{
-    "endpoint_id": "172f1cf9-dafc-45a0-8274-765aca60aa77",
-    "hostname": "Aryans-MacBook-Pro.local",
-    "public_key": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz1NeHZezENkvn+duCI7C\nwSXtMGgrFiST4QfrKXp7KFlAxyv2RqD5oiHGlJxszhR+GeWDLeu3Mis5AwMh/1KW\nlNo7cpycDr+5eMUatn4JfbNKUr13cDVPtmUL2lAD37aLO5DOl3u/hZY111YM6SlN\nIqc/6LjVdryBJ67zpIYjFE0tlNz6lT1Z7uX58Aee8y0JlNw79KS1TiAL/M29Sr4u\nafcNDEWqYMgb2NqGbexHPVuu3c2yDd2jjAItGN5LjZDPY8SfqmjNXT9JjZiNM4m5\nW7DjE0tWxlspG9DNHMOP0HM5mu7eG7Mh/mlGXsafg/HxTnyAcP+L8D9fFNZjfwiP\nRwIDAQAB\n-----END PUBLIC KEY-----\n",
-    "server_url": "http://127.0.0.1:8000"
-}
