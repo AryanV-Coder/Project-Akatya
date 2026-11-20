@@ -4,6 +4,16 @@ A host-based cybersecurity platform that detects localized ransomware attacks in
 
 ---
 
+### What Does "Akatya" (अकाट्य) Mean?
+
+> **अकाट्य (Akatya)** is a Sanskrit/Hindi word meaning **irrefutable**, **incontrovertible**, or **unassailable** — that which cannot be cut, broken, refuted, or compromised.
+
+In the context of **Project Akatya**, the name signifies two pillars:
+1. **Unbreakable Defense & Cloud Vault (अकाट्य सुरक्षा):** Backups are protected via hybrid asymmetric encryption (`RSA-2048-OAEP` + `AES-256-GCM`) stored in an append-only cloud vault. The endpoint agent holds only the public encryption key, ensuring that even if ransomware achieves administrative privileges on the target machine, it can neither decrypt nor corrupt past backup bitstreams.
+2. **Irrefutable Legal Evidence (अकाट्य प्रमाण):** Electronic evidence in legal proceedings must adhere to strict chain-of-custody rules under **Section 65B of the Indian Evidence Act, 2000**. Project Akatya produces tamper-proof, deterministic SHA-256 forensic reports that provide incontestable digital proof of cyber incidents in a court of law.
+
+---
+
 ## Architecture Overview
 
 ```
@@ -60,6 +70,7 @@ Project_Akatya/
 ├── agent.py                    # Endpoint Monitoring Agent & Kill-Switch
 ├── simulate_attack.py          # Controlled Ransomware Simulation Script
 ├── dashboard.py                # Streamlit Web Monitoring & Recovery Dashboard
+├── reset_db.py                 # Supabase Database Reset & Cleanup Script
 ├── requirements.txt            # Python Dependencies
 ├── agent_config.json           # Cached Endpoint Credentials (Public Key only)
 ├── demo_sandbox/               # Monitored Folder for live testing
